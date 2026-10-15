@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.py[cod]
+.DS_Store
+
+# Full raw datasets and generated outputs
+data/raw/
+output/
+
+# Keep evaluation examples tracked
+data/holdout/*
+!data/holdout/eval.jsonl
