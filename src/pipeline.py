@@ -8,11 +8,27 @@ import shutil
 import sys
 from collections import Counter
 from pathlib import Path
+import re
 
 from deduplication import NearDuplicateIndex, SIMILARITY_THRESHOLD
 from quality import quality_check
 from redaction import redact_pii
 from text_processing import classify_language, normalize_text
+
+
+def normalize_source_url(value):
+    """Extract the destination URL from a Markdown link."""
+    if not isinstance(value, str):
+        return value
+
+    value = value.strip()
+    closing = value.rfind("](")
+
+    if value.startswith("[") and closing != -1 and value.endswith(")"):
+        value = value[closing + 2:-1]
+
+    return value.replace(r"\\_", "_")
+
 
 
 def stable_id(source_file: str, line_number: int) -> str:
@@ -141,6 +157,15 @@ def process_file(path, source_root, clean_file, ledger_file, seen_hashes, near_i
                 "text": text,
                 "lang": language,
                 "source": source_name,
+                "url": normalize_source_url(record.get("url")),
+                "title": record.get("title"),
+                "license": record.get("license"),
+                "download_date": record.get("download_date"),
+                "source_metadata": {
+                    key: record[key]
+                    for key in ("dataset", "dataset_config", "pageid")
+                    if key in record
+                },
             }
 
             clean_file.write(

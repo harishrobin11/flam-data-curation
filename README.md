@@ -42,9 +42,9 @@ Run the unit tests with:
 python -m unittest discover -s tests -v
 ```
 
-The current test suite covers text normalization, baseline language
-classification, common PII redaction cases, quality checks, and
-near-duplicate detection.
+The current 16-test suite passes and covers text normalization,
+language classification, common PII redaction cases, quality checks,
+and near-duplicate detection. It does not cover every pipeline edge case.
 
 ## Observed dataset run
 

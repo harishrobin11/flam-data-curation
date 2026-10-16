@@ -3,25 +3,27 @@
 import math
 import re
 from collections import defaultdict
+from functools import lru_cache
 
 
 SIMILARITY_THRESHOLD = 0.50
 
 
-def word_shingles(text: str, size: int = 3) -> set[str]:
-    """Return sets of consecutive word sequences."""
+@lru_cache(maxsize=8192)
+def word_shingles(text: str, size: int = 3) -> frozenset[str]:
+    """Return immutable sets of consecutive word sequences."""
     words = re.findall(r"\w+", text.casefold(), flags=re.UNICODE)
 
     if not words:
-        return set()
+        return frozenset()
 
     if len(words) < size:
-        return {" ".join(words)}
+        return frozenset({" ".join(words)})
 
-    return {
+    return frozenset(
         " ".join(words[i:i + size])
         for i in range(len(words) - size + 1)
-    }
+    )
 
 
 def jaccard_similarity(left: set[str], right: set[str]) -> float:
@@ -42,7 +44,21 @@ class NearDuplicateIndex:
 
         self.threshold = threshold
         self.documents = {}
+        self.document_sizes = {}
         self.inverted_index = defaultdict(set)
+        self._required_overlap_cache = {}
+
+    def _required_overlap(self, query_size: int, document_size: int) -> int:
+        """Minimum overlap needed to meet the Jaccard threshold."""
+        key = (query_size, document_size)
+        result = self._required_overlap_cache.get(key)
+        if result is None:
+            result = math.ceil(
+                self.threshold * (query_size + document_size)
+                / (1 + self.threshold)
+            )
+            self._required_overlap_cache[key] = result
+        return result
 
     def find_duplicate(self, text: str):
         shingles = word_shingles(text)
@@ -50,7 +66,6 @@ class NearDuplicateIndex:
         if not shingles:
             return None
 
-        # Count shared shingles without repeatedly constructing set unions.
         overlap_counts = defaultdict(int)
         for shingle in shingles:
             for document_id in self.inverted_index.get(shingle, ()):
@@ -61,16 +76,9 @@ class NearDuplicateIndex:
         best_score = 0.0
 
         for document_id, overlap in overlap_counts.items():
-            document_size = len(self.documents[document_id])
+            document_size = self.document_sizes[document_id]
 
-            # Jaccard = overlap / (query_size + document_size - overlap).
-            # Prune only when the candidate mathematically cannot meet
-            # the configured threshold.
-            required_overlap = math.ceil(
-                self.threshold * (query_size + document_size)
-                / (1 + self.threshold)
-            )
-            if overlap < required_overlap:
+            if overlap < self._required_overlap(query_size, document_size):
                 continue
 
             score = overlap / (query_size + document_size - overlap)
@@ -90,6 +98,7 @@ class NearDuplicateIndex:
     def add(self, document_id: str, text: str):
         shingles = word_shingles(text)
         self.documents[document_id] = shingles
+        self.document_sizes[document_id] = len(shingles)
 
         for shingle in shingles:
             self.inverted_index[shingle].add(document_id)

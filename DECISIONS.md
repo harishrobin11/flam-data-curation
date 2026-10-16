@@ -23,9 +23,9 @@ Retained language labels:
 
 | Label | Count |
 |---|---:|
-| `hi` | 5,730 |
-| `hi-Latn` | 2,529 |
-| `en` | 2,104 |
+| `hi` | 5,350 |
+| `hi-Latn` | 1,936 |
+| `en` | 3,077 |
 | `other` | 0 |
 
 The input files were `hindi_wikipedia.jsonl`,
@@ -39,6 +39,22 @@ from the HinGE dataset. Verify each source's license, attribution
 requirements, and redistribution terms before distributing the data.
 The Wikipedia downloader uses a cautious license note; not every
 article's licensing obligations have been independently verified.
+
+### Observed input source breakdown
+
+| Input file | Records | Reported disk usage |
+|---|---:|---:|
+| `hindi_wikipedia.jsonl` | 14 | 64 KB |
+| `hindi_wikipedia_bulk.jsonl` | 137 | 452 KB |
+| `hindi_wikipedia_checked.jsonl` | 13 | 64 KB |
+| `hindi_wikipedia_hf.jsonl` | 7,000 | 59 MB |
+| `hinglish.jsonl` | 4,772 | 1.1 MB |
+| **Total** | **11,936** | — |
+
+Sizes are rounded local disk-usage readings, not exact byte counts.
+The Wikipedia-derived files and HinGE records have not had all license,
+attribution, and redistribution obligations independently verified.
+These counts describe the local raw files used for the observed run.
 
 ## 3. Processing decisions
 
@@ -87,8 +103,9 @@ The report is `output/contamination.jsonl`.
 - Calibrate the near-duplicate threshold using representative positive
   and negative pairs, including borderline cases.
 - Inspect false positives and false negatives from filtering and redaction.
-- Add automated tests for malformed input, deterministic IDs, redaction,
-  deduplication, and ledger consistency.
+- Expand automated tests for malformed input, deterministic IDs,
+  edge-case redaction, and ledger consistency. The current 16-test suite
+  passes but does not cover every pipeline edge case.
 - Validate one ledger outcome per input record and check the final sample
   against the required schema.
 - Confirm source metadata and URLs are preserved in the clean output.
