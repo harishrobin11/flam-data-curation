@@ -1,13 +1,14 @@
 # Flam Data Curation Pipeline
 
-A Python prototype for streaming JSONL text curation, language classification,
-PII redaction, quality filtering, deduplication, and evaluation contamination
-checks.
+A Python prototype for curating Hindi and Hinglish text with Unicode
+normalization, language classification, personal-information redaction,
+quality filtering, deduplication, a processing ledger, and evaluation
+contamination checks.
 
 ## Requirements
 
 - Python 3.10 or later
-- No third-party packages are required by the core pipeline
+- No third-party packages required by the core pipeline
 
 ## Run the pipeline
 
@@ -17,16 +18,14 @@ From the repository root:
 ./run.sh data/raw output
 ```
 
-The pipeline reads JSONL files from the input directory and writes:
+The pipeline reads JSONL files from the input directory and generates:
 
-- `output/clean.jsonl` — retained documents
-- `output/ledger.jsonl` — one processing record per input line
-- `output/manifest.json` — processing counts and configuration
+- `output/clean.jsonl` — retained documents in JSONL format
+- `output/clean.jsonl.gz` — deterministic compressed JSONL for delivery
+- `output/ledger.jsonl` — a processing record for each input line
+- `output/manifest.json` — run counts and configuration
 
-Each retained document contains an ID, text, language label, and source
-metadata where available.
-
-## Check evaluation contamination
+Run the evaluation contamination check separately:
 
 ```bash
 python src/contamination.py \
@@ -35,27 +34,64 @@ python src/contamination.py \
   output/contamination.jsonl
 ```
 
-The checker reports normalized exact matches and word-trigram Jaccard
-near-duplicates. Cross-script transliteration matching is not implemented.
+## Automated tests
+
+Run the unit tests with:
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+The current test suite covers text normalization, baseline language
+classification, common PII redaction cases, quality checks, and
+near-duplicate detection.
+
+## Observed dataset run
+
+The latest documented run processed five JSONL input files:
+
+- Input lines: 11,936
+- Valid records: 11,936
+- Retained records: 10,363
+- Dropped records: 1,573
+- Held-out evaluation examples: 200
+- Contamination flags: 0 using the implemented checks
+
+These figures describe a specific local run; they are not guaranteed
+for different input files or code versions.
+
+## Sources and licensing
+
+The input corpus includes Hindi Wikipedia-derived text and Hinglish
+records from the HinGE dataset. Check each source's license, attribution
+requirements, and redistribution terms before redistributing data.
+See `DECISIONS.md` for the current provenance notes and limitations.
 
 ## Repository layout
 
-- `src/` — pipeline modules
-- `data/sample/` — small example input sample
-- `data/holdout/` — evaluation examples
-- `download_wikipedia.py` and `download_wikipedia_bulk.py` — source acquisition
+- `src/` — processing, quality, redaction, deduplication, and contamination modules
+- `tests/` — automated unit tests
+- `data/sample/` — a small example dataset
+- `data/holdout/` — held-out evaluation examples
+- `download.sh` — entry point for the Hindi Wikipedia downloaders
+- `download_eval.py` — evaluation-set acquisition
+- `download_hf_wikipedia.py` — Hugging Face Wikipedia acquisition
 - `run.sh` — pipeline entry point
-- `DECISIONS.md` — decisions, measured results, and limitations
+- `DECISIONS.md` — observed results, engineering decisions, and limitations
 
-Full raw datasets and generated outputs are intentionally excluded from Git.
+Raw datasets and generated output files are excluded from Git. Follow the
+source providers' terms when downloading, using, or sharing any data.
 
-## Current limitations
+## Known limitations
 
-The current run processed 4,936 input lines and retained 4,745 records.
-The evaluation set currently contains only five examples. Therefore, this
-prototype does not yet meet the 10,000-document target or the approximately
-200-example evaluation target. Source license verification, cross-script
-contamination checking, and large-scale performance validation remain
-incomplete.
+- Language classification is heuristic and may misclassify mixed-language text.
+- PII redaction uses regular expressions and can have false positives or negatives.
+- Near-duplicate detection uses word-trigram Jaccard similarity with a preliminary
+  threshold of 0.50.
+- Evaluation contamination checks do not implement cross-script Hindi/Latin
+  transliteration matching. Zero detected matches does not prove zero leakage.
+- Source licensing and attribution requirements still need full verification.
+- Multi-terabyte performance has not been benchmarked.
 
-See `DECISIONS.md` for current measurements and known limitations.
+This is a working prototype, not a production-ready data-curation system.
+See `DECISIONS.md` for further details.

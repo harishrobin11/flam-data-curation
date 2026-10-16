@@ -1,8 +1,10 @@
 
 """Streaming baseline pipeline for the Flam data-curation assessment."""
 
+import gzip
 import hashlib
 import json
+import shutil
 import sys
 from collections import Counter
 from pathlib import Path
@@ -187,6 +189,7 @@ def main():
     # Write to temporary files first, then replace outputs after success.
     clean_tmp = out_dir / "clean.jsonl.tmp"
     ledger_tmp = out_dir / "ledger.jsonl.tmp"
+    gzip_tmp = out_dir / "clean.jsonl.gz.tmp"
 
     try:
         with clean_tmp.open("w", encoding="utf-8") as clean_file, \
@@ -198,12 +201,21 @@ def main():
                     seen_hashes, near_index, stats
                 )
 
+        # Create a deterministic compressed copy of the clean JSONL.
+        with clean_tmp.open("rb") as source, gzip_tmp.open("wb") as target:
+            with gzip.GzipFile(
+                fileobj=target, mode="wb", filename="", mtime=0
+            ) as compressed:
+                shutil.copyfileobj(source, compressed)
+
         clean_tmp.replace(out_dir / "clean.jsonl")
         ledger_tmp.replace(out_dir / "ledger.jsonl")
+        gzip_tmp.replace(out_dir / "clean.jsonl.gz")
 
     except Exception:
         clean_tmp.unlink(missing_ok=True)
         ledger_tmp.unlink(missing_ok=True)
+        gzip_tmp.unlink(missing_ok=True)
         raise
 
     manifest = {
@@ -215,7 +227,8 @@ def main():
         "dropped": stats["dropped"],
         "kept_by_language": dict(stats["kept_by_language"]),
         "drop_reasons": dict(stats["drop_reasons"]),
-        "output_format": "JSONL",
+        "output_format": "JSONL and deterministic JSONL.GZ",
+        "compressed_output": "clean.jsonl.gz",
         "near_duplicate_detection": "word-trigram Jaccard similarity",
         "near_duplicate_threshold": SIMILARITY_THRESHOLD,
         "near_duplicate_index": "in-memory",
