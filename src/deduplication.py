@@ -1,5 +1,6 @@
 """Deterministic exact and near-duplicate detection using word shingles."""
 
+import math
 import re
 from collections import defaultdict
 
@@ -28,13 +29,17 @@ def jaccard_similarity(left: set[str], right: set[str]) -> float:
     if not left or not right:
         return 0.0
 
-    return len(left & right) / len(left | right)
+    intersection = len(left & right)
+    return intersection / (len(left) + len(right) - intersection)
 
 
 class NearDuplicateIndex:
-    """In-memory shingle index for a manageable corpus."""
+    """In-memory shingle index with overlap-based candidate pruning."""
 
     def __init__(self, threshold: float = SIMILARITY_THRESHOLD):
+        if not 0 < threshold <= 1:
+            raise ValueError("threshold must be in (0, 1]")
+
         self.threshold = threshold
         self.documents = {}
         self.inverted_index = defaultdict(set)
@@ -45,18 +50,35 @@ class NearDuplicateIndex:
         if not shingles:
             return None
 
-        candidates = set()
+        # Count shared shingles without repeatedly constructing set unions.
+        overlap_counts = defaultdict(int)
         for shingle in shingles:
-            candidates.update(self.inverted_index[shingle])
+            for document_id in self.inverted_index.get(shingle, ()):
+                overlap_counts[document_id] += 1
 
+        query_size = len(shingles)
         best_id = None
         best_score = 0.0
 
-        for document_id in sorted(candidates):
-            score = jaccard_similarity(
-                shingles, self.documents[document_id]
+        for document_id, overlap in overlap_counts.items():
+            document_size = len(self.documents[document_id])
+
+            # Jaccard = overlap / (query_size + document_size - overlap).
+            # Prune only when the candidate mathematically cannot meet
+            # the configured threshold.
+            required_overlap = math.ceil(
+                self.threshold * (query_size + document_size)
+                / (1 + self.threshold)
             )
-            if score > best_score:
+            if overlap < required_overlap:
+                continue
+
+            score = overlap / (query_size + document_size - overlap)
+
+            if score > best_score or (
+                score == best_score
+                and (best_id is None or document_id < best_id)
+            ):
                 best_id = document_id
                 best_score = score
 

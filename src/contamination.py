@@ -1,11 +1,14 @@
-"""Check held-out evaluation examples against the cleaned corpus."""
+"""Efficient exact and near-duplicate checks for evaluation data."""
 
 import json
 import sys
+from collections import defaultdict
 from pathlib import Path
 
 from deduplication import word_shingles, jaccard_similarity
 from text_processing import normalize_text
+
+THRESHOLD = 0.50
 
 
 def load_jsonl(path):
@@ -26,25 +29,31 @@ def load_jsonl(path):
 def main():
     if len(sys.argv) != 4:
         raise SystemExit(
-            "Usage: python src/contamination.py <eval.jsonl> "
-            "<clean.jsonl> <report.jsonl>"
+            "Usage: python src/contamination.py "
+            "<eval.jsonl> <clean.jsonl> <report.jsonl>"
         )
 
     eval_path, clean_path, report_path = map(Path, sys.argv[1:])
-    clean = list(load_jsonl(clean_path))
-
     exact_index = {}
-    for row in clean:
-        normalized = normalize_text(row["text"]).casefold()
-        exact_index.setdefault(normalized, row.get("id"))
+    shingles_by_id = {}
+    inverted_index = defaultdict(set)
 
-    clean_shingles = [
-        (row.get("id"), word_shingles(row["text"]))
-        for row in clean
-    ]
+    print("Indexing cleaned training data...", flush=True)
+
+    for row in load_jsonl(clean_path):
+        doc_id = row.get("id")
+        normalized = normalize_text(row["text"]).casefold()
+        exact_index.setdefault(normalized, doc_id)
+
+        shingles = word_shingles(row["text"])
+        shingles_by_id[doc_id] = shingles
+        for shingle in shingles:
+            inverted_index[shingle].add(doc_id)
 
     report_path.parent.mkdir(parents=True, exist_ok=True)
     checked = contaminated = 0
+
+    print("Checking evaluation examples...", flush=True)
 
     with report_path.open("w", encoding="utf-8") as out:
         for row in load_jsonl(eval_path):
@@ -61,13 +70,22 @@ def main():
                 best_score = 1.0
             else:
                 shingles = word_shingles(text)
-                for candidate_id, candidate_shingles in clean_shingles:
+                candidates = set()
+                for shingle in shingles:
+                    candidates.update(inverted_index.get(shingle, ()))
+
+                for candidate_id in candidates:
+                    candidate_shingles = shingles_by_id[candidate_id]
                     score = jaccard_similarity(shingles, candidate_shingles)
-                    if score > best_score:
+                    if score > best_score or (
+                        score == best_score
+                        and score > 0
+                        and (match_id is None or candidate_id < match_id)
+                    ):
                         best_score = score
                         match_id = candidate_id
 
-                if best_score >= 0.50:
+                if best_score >= THRESHOLD:
                     match_type = "near_duplicate"
                 else:
                     match_id = None
@@ -83,11 +101,14 @@ def main():
                 "similarity": round(best_score, 4),
             }, ensure_ascii=False) + "\n")
 
+            if checked % 25 == 0:
+                print(f"Checked {checked} evaluation examples...", flush=True)
+
     print(json.dumps({
         "evaluation_examples_checked": checked,
         "contaminated_examples": contaminated,
         "clean_examples": checked - contaminated,
-        "threshold": 0.50,
+        "threshold": THRESHOLD,
         "report": str(report_path),
     }, indent=2))
 
