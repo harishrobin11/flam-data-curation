@@ -44,7 +44,7 @@ def classify_language(text: str) -> str:
     # Small baseline vocabulary for testing only. We will improve
     # this using corpus inspection and measured validation results.
     hindi_words = {
-        "hai", "hain", "ho", "tha", "thi", "the",
+        "hai", "hain",  "tha", "thi",
         "ka", "ki", "ke", "ko", "mein", "nahi",
         "nahin", "aur", "kya", "aaj", "bahut",
         "accha", "achha", "mera", "meri", "tum",
